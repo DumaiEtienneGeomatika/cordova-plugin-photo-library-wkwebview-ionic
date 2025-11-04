@@ -467,16 +467,16 @@ final class PhotoLibraryService {
 
     func requestAuthorization(_ success: @escaping () -> Void, failure: @escaping (_ err: String) -> Void ) {
 
-        let status = PHPhotoLibrary.authorizationStatus()
+        let status = currentPhotoAuthStatus()
 
-        if status == .authorized {
+        if isAuthorized(status) {
             success()
             return
         }
 
         if status == .notDetermined {
             // Ask for permission
-            PHPhotoLibrary.requestAuthorization() { (status) -> Void in
+            requestPhotoAuth() { (status) -> Void in
                 switch status {
                 case .authorized:
                     success()
@@ -809,6 +809,36 @@ final class PhotoLibraryService {
             completion(nil, "Could not enumerate assets library")
         })
 
+    }
+    // 1) Vérifier l'autorisation actuelle (gère .limited sur iOS 14+)
+    private func currentPhotoAuthStatus() -> PHAuthorizationStatus {
+        if #available(iOS 14, *) {
+            return PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        } else {
+            return PHPhotoLibrary.authorizationStatus()
+        }
+    }
+
+    // 2) Demander l’autorisation correctement
+    private func requestPhotoAuth(completion: @escaping (PHAuthorizationStatus) -> Void) {
+        if #available(iOS 14, *) {
+            requestPhotoAuth(for: .readWrite) { status in
+                DispatchQueue.main.async { completion(status) }
+            }
+        } else {
+            requestPhotoAuth { status in
+                DispatchQueue.main.async { completion(status) }
+            }
+        }
+    }
+
+    // 3) Quand tu testes l’autorisation, accepte aussi `.limited` (iOS 14+)
+    private func isAuthorized(_ status: PHAuthorizationStatus) -> Bool {
+        if #available(iOS 14, *) {
+            return status == .authorized || status == .limited
+        } else {
+            return status == .authorized
+        }
     }
 
 }
